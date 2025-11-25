@@ -1,121 +1,150 @@
-# Infrastructure - AWS CDK
+# Cognito Flask Infrastructure
 
-This directory contains AWS CDK infrastructure code to deploy the Flask Authentication application with AWS Cognito, ECR, and ECS Fargate.
+AWS CDK infrastructure for deploying the Flask authentication application with AWS Cognito, ECR, and ECS Fargate.
 
 ## Architecture
 
-The infrastructure consists of three main stacks:
+```
+                    ┌─────────────────────────────────────────────────────────┐
+                    │                         VPC                              │
+                    │  ┌─────────────────┐       ┌─────────────────────────┐  │
+Internet ──────────►│  │  Public Subnet  │       │    Private Subnet       │  │
+                    │  │      (ALB)      │──────►│   (ECS Fargate Tasks)   │  │
+                    │  └─────────────────┘       └───────────┬─────────────┘  │
+                    │                                        │                │
+                    └────────────────────────────────────────┼────────────────┘
+                                                             │
+                              ┌───────────────┬──────────────┴──────────────┐
+                              │               │                             │
+                              ▼               ▼                             ▼
+                        ┌──────────┐   ┌──────────┐                  ┌──────────┐
+                        │ Cognito  │   │   ECR    │                  │CloudWatch│
+                        │User Pool │   │Repository│                  │  Logs    │
+                        └──────────┘   └──────────┘                  └──────────┘
+```
 
-### 1. **Cognito Stack** (`cognito-stack.ts`)
-- AWS Cognito User Pool with email-based authentication
-- User Pool Client configured for USER_PASSWORD_AUTH flow
-- Password policy enforcement
-- Email verification enabled
+## Stacks
 
-### 2. **ECR Stack** (`ecr-stack.ts`)
-- Elastic Container Registry for Docker images
-- Image scanning on push
-- Lifecycle policies to manage image retention
-- Automatic cleanup of untagged images
+| Stack | Description |
+|-------|-------------|
+| `CognitoStack` | AWS Cognito User Pool and App Client for authentication |
+| `EcrStack` | ECR repository for Docker images |
+| `EcsStack` | VPC, ECS Cluster, Fargate Service, and Application Load Balancer |
 
-### 3. **ECS Stack** (`ecs-stack.ts`)
-- ECS Fargate cluster
-- Application Load Balancer
-- Auto-scaling based on CPU and memory
-- CloudWatch logging
-- VPC with public and private subnets
-- IAM roles with least privilege access
+## Features
+
+- **Cognito User Pool**: Email-based authentication with password policies
+- **ECR Repository**: Private Docker image storage with lifecycle policies
+- **ECS Fargate**: Serverless container orchestration
+- **Application Load Balancer**: HTTP traffic distribution with health checks
+- **Auto Scaling**: CPU and memory-based scaling (1-10 tasks)
+- **CloudWatch Logs**: Centralized logging with 7-day retention
+- **VPC**: Isolated networking with public/private subnets
+
+## Prerequisites
+
+- Node.js 18+
+- AWS CLI configured with appropriate credentials
+- AWS CDK CLI (`npm install -g aws-cdk`)
 
 ## Quick Start
 
-### 1. Install Dependencies
-```bash
-npm install
-```
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-### 2. Configure AWS
-```bash
-aws configure
-```
+2. Bootstrap CDK (first time only):
+   ```bash
+   cdk bootstrap
+   ```
 
-### 3. Bootstrap CDK (first time only)
-```bash
-cdk bootstrap
-```
+3. Deploy all stacks:
+   ```bash
+   cdk deploy --all
+   ```
 
-### 4. Deploy Infrastructure
-```bash
-./scripts/deploy.sh
-```
-
-### 5. Build and Push Docker Image
-```bash
-./scripts/build-and-push.sh
-```
-
-## Useful CDK Commands
-
-* `npm run build`   - Compile TypeScript to JavaScript
-* `npm run watch`   - Watch for changes and compile
-* `npm run test`    - Run Jest unit tests
-* `cdk deploy --all` - Deploy all stacks to AWS
-* `cdk diff`        - Compare deployed stack with current state
-* `cdk synth`       - Emit synthesized CloudFormation template
-* `cdk destroy --all` - Destroy all stacks (cleanup)
+   Or use the deploy script:
+   ```bash
+   ./scripts/deploy.sh
+   ```
 
 ## Project Structure
 
 ```
 infrastructure/
-├── bin/                   # CDK app entry point
-├── lib/                   # Stack definitions
-│   ├── cognito-stack.ts  # Cognito User Pool
-│   ├── ecr-stack.ts      # ECR Repository
-│   ├── ecs-stack.ts      # ECS Fargate Service
-│   └── infrastructure-stack.ts  # Main orchestrator
-├── scripts/              # Deployment scripts
-└── test/                 # Unit tests
+├── bin/                        # CDK app entry point
+├── lib/
+│   ├── cognito-stack.ts        # Cognito User Pool
+│   ├── ecr-stack.ts            # ECR Repository
+│   ├── ecs-stack.ts            # ECS Fargate Service
+│   └── infrastructure-stack.ts # Main orchestrator
+├── scripts/
+│   ├── deploy.sh               # Full deployment script
+│   └── build-and-push.sh       # Docker build and push
+└── test/                       # Unit tests
 ```
 
-## Deployment Steps
+## Useful Commands
 
-1. **Deploy CDK Infrastructure**
-   ```bash
-   cd infrastructure
-   ./scripts/deploy.sh
-   ```
+| Command | Description |
+|---------|-------------|
+| `npm run build` | Compile TypeScript to JavaScript |
+| `npm run watch` | Watch for changes and compile |
+| `npm run test` | Run Jest unit tests |
+| `cdk deploy --all` | Deploy all stacks to AWS |
+| `cdk diff` | Compare deployed stack with current state |
+| `cdk synth` | Emit synthesized CloudFormation template |
+| `cdk destroy --all` | Remove all stacks |
 
-2. **Get CDK Outputs**
-   - Cognito User Pool ID
-   - Cognito Client ID
-   - ECR Repository URI
-   - Load Balancer URL
+## Stack Outputs
 
-3. **Retrieve Client Secret**
-   ```bash
-   aws cognito-idp describe-user-pool-client \
-     --user-pool-id <pool-id> \
-     --client-id <client-id> \
-     --query 'UserPoolClient.ClientSecret' \
-     --output text
-   ```
+After deployment, you'll receive:
 
-4. **Build and Push Docker Image**
-   ```bash
-   ./scripts/build-and-push.sh
-   ```
+- **CognitoUserPoolId**: User Pool ID for authentication
+- **CognitoClientId**: App Client ID for the frontend
+- **EcrRepositoryUri**: ECR repository URI for pushing images
+- **LoadBalancerUrl**: Application URL
 
-5. **Access Application**
-   - Open the Load Balancer URL from CDK outputs
+### Retrieve Client Secret
+
+```bash
+aws cognito-idp describe-user-pool-client \
+  --user-pool-id <pool-id> \
+  --client-id <client-id> \
+  --query 'UserPoolClient.ClientSecret' \
+  --output text
+```
 
 ## Configuration
 
-Edit `lib/infrastructure-stack.ts` to customize:
-- User Pool name
-- ECR repository name
-- ECS task CPU/memory
-- Container port
-- Auto-scaling settings
+### ECS Task Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `cpu` | 512 | CPU units (512 = 0.5 vCPU) |
+| `memoryLimitMiB` | 1024 | Memory in MiB |
+| `containerPort` | 8000 | Container port |
+| `desiredCount` | 1 | Initial task count |
+
+### Auto Scaling
+
+- **Min capacity**: 1 task
+- **Max capacity**: 10 tasks
+- **CPU target**: 70% utilization
+- **Memory target**: 80% utilization
+
+## Deploying Application Updates
+
+After pushing a new Docker image to ECR:
+
+```bash
+aws ecs update-service \
+  --cluster flask-auth-cluster \
+  --service <service-name> \
+  --force-new-deployment \
+  --region us-east-2
+```
 
 ## Monitoring
 
@@ -126,8 +155,17 @@ Edit `lib/infrastructure-stack.ts` to customize:
 ## Cleanup
 
 To destroy all resources:
+
 ```bash
 cdk destroy --all
 ```
 
 **Warning**: This deletes all resources including Cognito users and Docker images.
+
+## Related Repositories
+
+- [cognito-flask-frontend](https://github.com/Opius-AI/cognito-flask-frontend) - Flask application code
+
+## License
+
+MIT
